@@ -1,0 +1,165 @@
+version: "3"
+
+services:
+  # Nodejs application
+  node-api:
+    container_name: node-api
+    build: ./node-api
+    init: true
+    user: root
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./node-api/.env
+    environment:
+      - DB_HOST=host.docker.internal
+      - QUEUE_HOST=host.docker.internal
+    command: sh -c "yarn install && yarn run generate-migration && yarn run migrate && yarn dev"
+    depends_on:
+      - db
+      - cache
+      - rabbitmq
+      - kafka
+
+  # Go application
+  go-api:
+    container_name: go-api
+    build: "./go-api"
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./go-api/.env
+    init: true
+    user: root
+    environment:
+      - GO111MODULE=on
+      - DB_HOST=host.docker.internal
+      - QUEUE_HOST=host.docker.internal
+    command:
+      - sh
+      - -c
+      - |-
+        sleep 1 && \
+        CompileDaemon --build="go build -o go-api ." --command="./go-api"
+    depends_on:
+      - db
+      - cache
+      - rabbitmq
+      - kafka
+
+  # Python application
+  python-api:
+    container_name: python-api
+    build: "./python-api"
+    ports:
+      - "8002:8002"
+    env_file:
+      - ./python-api/.env
+    init: true
+    user: root
+    environment:
+      - DB_HOST=host.docker.internal
+      - QUEUE_HOST=host.docker.internal
+    depends_on:
+      - db
+      - cache
+      - rabbitmq
+      - kafka
+
+  # PostgreSQL database
+  db:
+    container_name: db
+    image: postgres:alpine3.19
+    environment:
+      POSTGRES_USER: superuser
+      POSTGRES_PASSWORD: superpassword
+      POSTGRES_DB: main
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redis database
+  cache:
+    container_name: cache
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  # Nginx instance
+  nginx:
+    container_name: nginx
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - node-api
+      - go-api
+      - python-api
+
+  # Zookeeper instance
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    restart: unless-stopped
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_PORT: 2181
+      ZOO_SERVERS: server.1=zoo:2888:3888
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - kafka-net
+
+  # Kafka instance
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    restart: always
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9092,OUTSIDE://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_LISTENERS: INSIDE://0.0.0.0:9092,OUTSIDE://0.0.0.0:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CREATE_TOPICS: "baeldung:1:1"
+    depends_on:
+      - zookeeper
+    networks:
+      - kafka-net
+
+  # RabbitMQ instance
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    environment:
+      RABBITMQ_DEFAULT_USER: "guest"
+      RABBITMQ_DEFAULT_PASS: "guest"
+    networks:
+      - rabbitmq_net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  kafka-net:
+    driver: bridge
+  rabbitmq_net:
+    driver: bridge
