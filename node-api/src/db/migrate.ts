@@ -1,5 +1,5 @@
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import db from ".";
+import db from "./index";
 
 // this will automatically run needed migrations on the database
 // "generate-migration": "npx drizzle-kit generate:pg --out src/db/migrations --schema src/db/schema.ts"

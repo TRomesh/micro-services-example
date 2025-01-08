@@ -1,40 +1,58 @@
-version: "3"
-
 services:
   # Nodejs application
   node-api:
     container_name: node-api
-    build: ./node-api
+    build:
+      context: ./node-api
+      dockerfile: Dockerfile
     init: true
     user: root
     ports:
       - "8000:8000"
-    env_file:
-      - ./node-api/.env
     environment:
-      - DB_HOST=host.docker.internal
-      - QUEUE_HOST=host.docker.internal
+      - DB_HOST=psql_db
+      - QUEUE_HOST=rabbitmq
+      - QUEUE_PORT=5672
+      - DB_PORT=5432
+      - DB_USER=superuser
+      - DB_PASSWORD=superpassword
+      - APP_PORT=8000
+    networks:
+      - db_network
+      - rabbitmq_net
+      - kafka_net
+      - app_network
     command: sh -c "yarn install && yarn run generate-migration && yarn run migrate && yarn dev"
     depends_on:
-      - db
-      - cache
+      - psql_db
+      - redis_cache
       - rabbitmq
       - kafka
 
   # Go application
   go-api:
     container_name: go-api
-    build: "./go-api"
+    build:
+      context: ./go-api
+      dockerfile: Dockerfile
     ports:
       - "8001:8001"
-    env_file:
-      - ./go-api/.env
     init: true
     user: root
     environment:
       - GO111MODULE=on
-      - DB_HOST=host.docker.internal
-      - QUEUE_HOST=host.docker.internal
+      - DB_HOST=psql_db
+      - QUEUE_HOST=rabbitmq
+      - QUEUE_PORT=5672
+      - QUEUE_NAME=micro-services-queue
+      - QUEUE_PASSWORD=guest
+      - QUEUE_USER=guest
+      - APP_PORT=8001
+    networks:
+      - db_network
+      - rabbitmq_net
+      - kafka_net
+      - app_network
     command:
       - sh
       - -c
@@ -42,34 +60,42 @@ services:
         sleep 1 && \
         CompileDaemon --build="go build -o go-api ." --command="./go-api"
     depends_on:
-      - db
-      - cache
+      - psql_db
+      - redis_cache
       - rabbitmq
       - kafka
 
   # Python application
   python-api:
     container_name: python-api
-    build: "./python-api"
+    build:
+      context: ./python-api
+      dockerfile: Dockerfile
+    volumes:
+      - ./python-api:/app
+      - /app/.venv
     ports:
       - "8002:8002"
-    env_file:
-      - ./python-api/.env
-    init: true
-    user: root
     environment:
-      - DB_HOST=host.docker.internal
-      - QUEUE_HOST=host.docker.internal
+      - DB_HOST=psql_db
+      - QUEUE_HOST=rabbitmq
+      - QUEUE_PORT=5672
+    networks:
+      - db_network
+      - rabbitmq_net
+      - kafka_net
+      - app_network
+    command: sh -c "uvicorn python_api.main:app --port=8002 --host=0.0.0.0 --reload --log-level debug"
     depends_on:
-      - db
-      - cache
+      - psql_db
+      - redis_cache
       - rabbitmq
       - kafka
 
   # PostgreSQL database
-  db:
-    container_name: db
-    image: postgres:alpine3.19
+  psql_db:
+    container_name: psql_db
+    image: postgres:15.5-alpine3.19
     environment:
       POSTGRES_USER: superuser
       POSTGRES_PASSWORD: superpassword
@@ -78,6 +104,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    networks:
+      - db_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -85,11 +113,13 @@ services:
       retries: 10
 
   # Redis database
-  cache:
-    container_name: cache
+  redis_cache:
+    container_name: redis_cache
     image: redis:alpine
     ports:
       - "6379:6379"
+    networks:
+      - db_network
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -100,8 +130,12 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    # command: sh -c "chown -R nginx:nginx /var/lib/nginx"
+    networks:
+      - app_network
     depends_on:
       - node-api
       - go-api
@@ -120,7 +154,7 @@ services:
       ZOO_SERVERS: server.1=zoo:2888:3888
       ZOOKEEPER_CLIENT_PORT: 2181
     networks:
-      - kafka-net
+      - kafka_net
 
   # Kafka instance
   kafka:
@@ -139,7 +173,7 @@ services:
     depends_on:
       - zookeeper
     networks:
-      - kafka-net
+      - kafka_net
 
   # RabbitMQ instance
   rabbitmq:
@@ -159,7 +193,11 @@ volumes:
   redis_data:
 
 networks:
-  kafka-net:
+  kafka_net:
     driver: bridge
   rabbitmq_net:
+    driver: bridge
+  db_network:
+    driver: bridge
+  app_network:
     driver: bridge

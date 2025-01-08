@@ -1,4 +1,4 @@
-import type { Config } from "drizzle-kit";
+import { defineConfig } from "drizzle-kit";
 
 import {
   DB_DATABASE,
@@ -8,17 +8,16 @@ import {
   DB_USER,
 } from "./src/config";
 
-export default {
-  schema: "./src/db/schema.ts",
+export default defineConfig({
   out: "./drizzle",
-  driver: "pg",
+  schema: "./src/db/schema.ts",
+  dialect: "postgresql",
   dbCredentials: {
+    database: DB_DATABASE,
+    host: DB_HOST,
     user: DB_USER,
     password: DB_PASSWORD,
-    host: DB_HOST,
     port: DB_PORT,
-    database: DB_DATABASE,
+    ssl: false,
   },
-  verbose: true,
-  strict: true,
-} satisfies Config;
+});

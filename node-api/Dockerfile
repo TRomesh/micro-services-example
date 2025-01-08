@@ -8,8 +8,8 @@ RUN yarn install
 
 # Copy TypeScript code and compile
 COPY . .
-RUN yarn build
+RUN npm run build
 
 # Expose port and start the server
 EXPOSE 8000
-CMD ["yarn", "start"]
+CMD ["npm", "start"]

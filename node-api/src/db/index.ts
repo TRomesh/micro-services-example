@@ -12,6 +12,6 @@ const client = new Pool({
   database: DB_DATABASE,
 });
 
-const db = drizzle(client, { schema });
+const db = drizzle({ client, schema });
 
 export default db;
