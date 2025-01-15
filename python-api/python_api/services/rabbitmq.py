@@ -1,8 +1,9 @@
 import json
 import pika
+import os
 
-QUEUE_HOST = 'rabbitmq'
-QUEUE_PORT = 5672
+QUEUE_HOST = os.getenv("QUEUE_HOST")
+QUEUE_PORT = os.getenv("QUEUE_PORT")
 
 async def rabbitmq_listener():
     def callback(ch, method, properties, body):
@@ -12,10 +13,10 @@ async def rabbitmq_listener():
 
     connection = pika.BlockingConnection(pika.ConnectionParameters(QUEUE_HOST, QUEUE_PORT))
     channel = connection.channel()
-    channel.queue_declare(queue="payments_queue")
+    channel.queue_declare(queue=QUEUE_HOST)
 
     channel.basic_consume(
-        queue="payments_queue",
+        queue=QUEUE_HOST,
         on_message_callback=callback,
         auto_ack=True,
     )

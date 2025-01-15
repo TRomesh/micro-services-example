@@ -28,7 +28,7 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/ping")
 async def ping():
-    return "pong 🏓"
+    return { "message": "python-api pong 🏓" }
 
 @app.post("/payments/", response_model=PaymentResponse)
 async def create_payment(payment: PaymentCreate, db: AsyncSession = Depends(get_db)):

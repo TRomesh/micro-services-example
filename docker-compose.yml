@@ -13,6 +13,7 @@ services:
       - DB_HOST=psql_db
       - QUEUE_HOST=rabbitmq
       - QUEUE_PORT=5672
+      - QUEUE_NAME=users-queue
       - DB_PORT=5432
       - DB_USER=superuser
       - DB_PASSWORD=superpassword
@@ -44,10 +45,11 @@ services:
       - DB_HOST=psql_db
       - QUEUE_HOST=rabbitmq
       - QUEUE_PORT=5672
-      - QUEUE_NAME=micro-services-queue
+      - QUEUE_NAME=users-queue
       - QUEUE_PASSWORD=guest
       - QUEUE_USER=guest
       - APP_PORT=8001
+      - MONGO_URI=mongodb://admin:password@mongo_db:27017
     networks:
       - db_network
       - rabbitmq_net
@@ -61,6 +63,7 @@ services:
         CompileDaemon --build="go build -o go-api ." --command="./go-api"
     depends_on:
       - psql_db
+      - mongo_db
       - redis_cache
       - rabbitmq
       - kafka
@@ -80,12 +83,13 @@ services:
       - DB_HOST=psql_db
       - QUEUE_HOST=rabbitmq
       - QUEUE_PORT=5672
+      - QUEUE_NAME=payments_queue
     networks:
       - db_network
       - rabbitmq_net
       - kafka_net
       - app_network
-    command: sh -c "uvicorn python_api.main:app --port=8002 --host=0.0.0.0 --reload --log-level debug"
+    command: sh -c "uvicorn python_api.main:app --port=8002 --host=localhost --reload --log-level debug"
     depends_on:
       - psql_db
       - redis_cache
@@ -111,6 +115,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # MongoDB database
+  mongo_db:
+    image: mongo:8.0
+    container_name: mongo_db
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    networks:
+      - db_network
+    volumes:
+      - mongodb_data:/data/db # Persist MongoDB data
 
   # Redis database
   redis_cache:
@@ -191,6 +209,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  mongodb_data:
 
 networks:
   kafka_net:

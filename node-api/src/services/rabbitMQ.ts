@@ -12,8 +12,11 @@ class RabbitMQ {
     this.channel = await this.conn.createChannel();
   }
 
-  async sendToQueue(queue: string, message: string) {
+  async createQueue(queue: string) {
     await this.channel?.assertQueue(queue, { durable: false });
+  }
+
+  async sendToQueue(queue: string, message: string) {
     this.channel?.sendToQueue(queue, Buffer.from(message));
     console.log(" [x] Sent '%s'", message);
   }

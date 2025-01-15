@@ -27,7 +27,7 @@ app.use(
 app.use(rateLimiter);
 
 app.use("/ping", (_: Request, res: Response) => {
-  res.status(200).send("pong 🏓");
+  res.status(200).json({ message: "node-api pong 🏓" });
 });
 
 app.locals.db = db;
